@@ -1,0 +1,94 @@
+---
+title: "The Office politeness analysis"
+format: html
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r}
+library(tidyverse)
+library(schrute)
+library(politeness)
+library(spacyr)
+library(doParallel)
+library(janitor)
+
+spacy_initialize()
+registerDoParallel(cores = parallel::detectCores())
+theme_set(theme_light())
+
+```
+
+# Pre-processing the data
+
+I use the `{politeness}` package to get a politeness score to every line that is said in the series. Because it takes a lot of time, I pre-processed the original dataset, and created a new file, which is much quicker to load.
+
+```{r}
+#| cache: true
+# Don't run if you don't want to redo the pre-processing
+# office_raw <- as_tibble(theoffice)
+# 
+# office <- 
+#   office_raw |> 
+#   mutate(polite_score = politenessModel(text)) |> 
+#   bind_cols(politeness(office_raw$text, 
+#                        parser = "spacy")) |> 
+#   clean_names()
+# 
+# write_excel_csv(office, "data/office_politness.csv")
+
+```
+
+```{r}
+# Read the pre-processed dataset
+
+office <- read_csv("data/office_politness.csv")
+
+```
+
+
+# The most and least polite characters
+
+```{r}
+office |> 
+  mutate(character = str_remove_all(character, "\"|\\.")) |> 
+  group_by(character) |> 
+  summarise(lines = n(),
+            avg_polite = mean(polite_score)) |> 
+  filter(lines > 500) |> 
+  mutate(character = fct_reorder(character, avg_polite)) |> 
+  ggplot() +
+  aes(y = character, x = avg_polite) +
+  geom_col(aes(fill = if_else(avg_polite <= 0, T, F)), 
+           show.legend = FALSE) +
+  labs(y = NULL, x = "Average politeness score",
+       title = "Politeness of the main characters of The Office")
+  
+```
+
+
+```{r}
+
+office |> 
+  mutate(character = str_remove_all(character, "\"|\\.")) |> 
+  group_by(character) |> 
+  mutate(n_lines = n()) |> 
+  ungroup() |> 
+  filter(n_lines > 500) |> 
+  select(character, hedges:conjunction_start) |> 
+  pivot_longer(-character) |> 
+  group_by(character, name) |> 
+  summarise(avg_feature = mean(value), .groups = "drop") |> 
+  ggplot() +
+  aes(y = character, x = avg_feature) +
+  geom_col() +
+  facet_wrap(~ name, scales = "free") +
+  labs(y = NULL, x = "Average feature score",
+       title = "Politeness features of the main characters of The Office")
+
+
+```
+
+
+
+
